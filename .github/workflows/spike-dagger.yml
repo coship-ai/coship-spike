@@ -33,3 +33,9 @@ jobs:
         run: '"$HOME/.local/bin/dagger" check && rc=0 || rc=$?; echo "all exit=$rc"'
       - name: Run a selector that matches nothing
         run: '"$HOME/.local/bin/dagger" check no-such-check && rc=0 || rc=$?; echo "typo exit=$rc"'
+      - name: Run real selectors
+        run: |
+          for s in lint ruff test pytest ruff:lint; do
+            "$HOME/.local/bin/dagger" check "$s" > /tmp/out.txt 2>&1 && rc=0 || rc=$?
+            echo "selector '$s' exit=$rc :: $(grep -E 'passed|matched|Error' /tmp/out.txt | tr '\n' ' ' | cut -c1-160)"
+          done
