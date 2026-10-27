@@ -1,0 +1,33 @@
+{
+  "include": [
+    "**/{test,tests,spec,__tests__}/**",
+    "**/*.{test,spec}.*",
+    "**/test_*.py",
+    "**/*_test.*"
+  ],
+  "exclude": [
+    "**/dagger.lock",
+    "**/*.lock",
+    "**/dist/**"
+  ],
+  "rules": [
+    {
+      "path": "**/*.md",
+      "rule": "Documentation: check only that commands, paths, links and facts are correct. Never comment on style or wording."
+    },
+    {
+      "path": "**/{test,tests,spec,__tests__}/**",
+      "rule": "Each test proves one acceptance behaviour through the public interface. Flag a test that asserts configuration, YAML, documentation or repository text, or that duplicates another test."
+    },
+    {
+      "path": "**/migrations/**",
+      "rule": "A migration must be reversible, or say why not. Check for data loss, long locks and missing backfills.",
+      "merge_system_rule": true
+    },
+    {
+      "path": "**",
+      "rule": "Flag only defects a user or operator would notice, security problems, or broken contracts. Never style or naming. Learned rules go above this one.",
+      "merge_system_rule": true
+    }
+  ]
+}

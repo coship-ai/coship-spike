@@ -1,0 +1,11 @@
+# Dagger workspace for this repository. Every check runs through `dagger check`: on a
+# laptop, for agents and in CI, in the same containers. Services a test needs, such as a
+# database, run as Dagger services, so no test depends on a fixed port.
+ignore = [".claude/worktrees", "node_modules", ".venv", "dist", "build"]
+check-generated = true
+
+[modules.pytest]
+source = "dagger.io/python/pytest"
+
+[modules.ruff]
+source = "dagger.io/python/ruff"

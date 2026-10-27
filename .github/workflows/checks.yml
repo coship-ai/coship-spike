@@ -1,0 +1,70 @@
+# The one required check, `checks`: `dagger check` at the scope the pull request needs.
+# Scope: full when labelled full-check, quick when labelled lane:Quick, otherwise pr.
+# Selectors and the Dagger version come from repository variables that setup-dev copies
+# from the strategy repository's coship.yaml: COSHIP_CHECKS_QUICK, COSHIP_CHECKS_PR,
+# COSHIP_CHECKS_FULL (empty means every check) and DAGGER_VERSION.
+# A passing result is keyed by the commit's tree, so the same tree is never checked twice.
+# Keep the job name `checks` unconditional: a skipped required job counts as passing.
+name: checks
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled]
+permissions:
+  contents: read
+  statuses: write
+concurrency:
+  group: checks-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - id: scope
+        env:
+          LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
+          QUICK: ${{ vars.COSHIP_CHECKS_QUICK }}
+          PR: ${{ vars.COSHIP_CHECKS_PR }}
+          FULL: ${{ vars.COSHIP_CHECKS_FULL }}
+        run: |
+          case ",$LABELS," in
+            *,full-check,*) scope=full; selectors="$FULL" ;;
+            *,lane:Quick,*) scope=quick; selectors="$QUICK" ;;
+            *) scope=pr; selectors="$PR" ;;
+          esac
+          echo "scope=$scope" >> "$GITHUB_OUTPUT"
+          echo "selectors=$selectors" >> "$GITHUB_OUTPUT"
+          echo "tree=$(git rev-parse 'HEAD^{tree}')" >> "$GITHUB_OUTPUT"
+      - id: proof
+        uses: actions/cache/restore@v4
+        with:
+          path: .proof
+          key: proof-${{ steps.scope.outputs.scope }}-${{ steps.scope.outputs.tree }}
+          lookup-only: true
+      - name: Install Dagger
+        if: steps.proof.outputs.cache-hit != 'true'
+        env:
+          DAGGER_VERSION: ${{ vars.DAGGER_VERSION }}
+        run: curl -fsSL https://dl.dagger.io/dagger/install.sh | BIN_DIR="$HOME/.local/bin" sh
+      - name: dagger check
+        if: steps.proof.outputs.cache-hit != 'true'
+        env:
+          SELECTORS: ${{ steps.scope.outputs.selectors }}
+        run: $HOME/.local/bin/dagger check $SELECTORS
+      - name: Remember the passing tree
+        if: steps.proof.outputs.cache-hit != 'true'
+        run: mkdir -p .proof && echo ok > .proof/ok
+      - if: steps.proof.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: .proof
+          key: proof-${{ steps.scope.outputs.scope }}-${{ steps.scope.outputs.tree }}
+      - name: Record the scope
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ github.event.pull_request.head.sha }}
+          SCOPE: ${{ steps.scope.outputs.scope }}
+        run: gh api "repos/$GITHUB_REPOSITORY/statuses/$SHA" -f state=success -f context=checks/scope -f description="$SCOPE"
