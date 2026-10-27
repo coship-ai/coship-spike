@@ -1,0 +1,35 @@
+# Spike: does a pinned Dagger 1.0 beta install in Actions, does `dagger module install`
+# write dagger.toml and dagger.lock, and how do check selectors behave? Every step
+# prints its exit code instead of failing, so one run answers every question.
+name: spike-dagger
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+permissions:
+  contents: read
+jobs:
+  spike:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install the pinned Dagger version
+        env:
+          DAGGER_VERSION: ${{ vars.DAGGER_VERSION }}
+        run: |
+          echo "requested DAGGER_VERSION=$DAGGER_VERSION"
+          curl -fsSL https://dl.dagger.io/dagger/install.sh | BIN_DIR="$HOME/.local/bin" sh
+          "$HOME/.local/bin/dagger" version
+      - name: module install writes dagger.toml and dagger.lock
+        run: |
+          D=$(mktemp -d); cd "$D"; git init -q
+          printf 'ignore = ["dist"]\n' > dagger.toml
+          "$HOME/.local/bin/dagger" module install dagger.io/python/pytest && rc=0 || rc=$?; echo "module install exit=$rc"
+          echo "----- dagger.toml"; cat dagger.toml
+          echo "----- dagger.lock"; cat dagger.lock 2>/dev/null || echo "(no dagger.lock)"
+      - name: List checks
+        run: '"$HOME/.local/bin/dagger" check -l && rc=0 || rc=$?; echo "list exit=$rc"'
+      - name: Run every check
+        run: '"$HOME/.local/bin/dagger" check && rc=0 || rc=$?; echo "all exit=$rc"'
+      - name: Run a selector that matches nothing
+        run: '"$HOME/.local/bin/dagger" check no-such-check && rc=0 || rc=$?; echo "typo exit=$rc"'
